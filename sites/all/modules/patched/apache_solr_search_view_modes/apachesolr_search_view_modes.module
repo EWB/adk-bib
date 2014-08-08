@@ -1,0 +1,113 @@
+<?php
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function apachesolr_search_view_modes_form_apachesolr_search_page_settings_form_alter(&$form, &$form_state, $form_id) {
+  $view_modes = array();
+  $view_modes[] = 'Use default core search result';
+
+  // Build the view modes dropdown list.
+  $entity_info = entity_get_info('node'); 
+  foreach ($entity_info['view modes'] as $machine_name => $view_mode) {
+    $view_modes[$machine_name] = $view_mode['label'];
+   }
+
+  // Grab the search page id.
+  $search_page_id = $form['search_page']['#value']['page_id'];
+
+  // Fetch currently save Solr view modes.
+  $solr_view_modes =  variable_get('apachesolr_search_view_modes', FALSE);
+
+  $form['info']['page_title']['#weight'] = -2;
+  $form['info']['apachesolr_search_view_mode'] = array(
+    '#type' => 'select',
+    '#title' => t('View Mode'),
+    '#description' => t('Select another view mode in favor of the default search view mode.'),
+    '#options' => $view_modes,
+    '#weight' => -1,
+    '#default_value' => isset($solr_view_modes[$search_page_id]) ? $solr_view_modes[$search_page_id] : FALSE,
+  );
+
+  // Add custom submit handler.
+  $form['#submit'][] = 'apachesolr_search_view_modes_save_view_mode';
+}
+
+/**
+ * Implementation of apachesolr_search_view_modes_save_view_mode().
+ *
+ * Apachesolr submit handler.
+ */
+function apachesolr_search_view_modes_save_view_mode($form, &$form_state) {
+  $values = $form_state['values'];
+  
+  // Get previously saved view modes.
+  $solr_view_modes =  variable_get('apachesolr_search_view_modes', FALSE);
+
+  // Set the new values.
+  if(isset($values['apachesolr_search_view_mode']) && $values['apachesolr_search_view_mode'] != '0') {
+    $solr_view_modes[$values['page_id']] = $values['apachesolr_search_view_mode'];
+  }
+  else {
+    unset($solr_view_modes[$values['page_id']]);
+  }
+  variable_set('apachesolr_search_view_modes', $solr_view_modes);
+}
+
+/**
+ * Implements hook_apachesolr_search_page_alter().
+ */
+function apachesolr_search_view_modes_apachesolr_search_page_alter(array &$build, array $search_page) {
+  // Override search_result theme function, if a difftrent view_mode is selected.
+  $solr_view_modes = variable_get('apachesolr_search_view_modes', '');
+  if (isset($search_page['page_id']) && isset($solr_view_modes[$search_page['page_id']])) {
+    $build['search_results']['#theme'] = 'apachesolr_search_view_modes_search_result';
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function apachesolr_search_view_modes_theme($variables) {
+  return array(
+    'apachesolr_search_view_modes_search_result' => array(
+      'variables' => array(
+        'results' => NULL,
+        'module' => NULL,
+        'search_page' => NULL,
+        'search_results' => NULL,
+      ),
+      'template' => 'apachesolr-search-view-modes-search-result',
+    ),
+  );
+}
+
+/**
+ * Implementation of template_preprocess_apachesolr_search_view_modes_search_result().
+ */
+function template_preprocess_apachesolr_search_view_modes_search_result(&$variables) {
+  if (!empty($variables['results'])) {
+    $solr_view_modes = variable_get('apachesolr_search_view_modes', '');
+     $view_mode = $solr_view_modes[$variables['search_page']['page_id']];
+    // Iterate through results and load the node view mode.
+    $variables['search_results'] = '';
+    foreach ($variables['results'] as $result) {
+      $entity_type = $result['entity_type'];
+      // A User result does not contain the user object, so we need to get
+      // the entity id from fields array.
+      $entity_id = ($entity_type == 'user') ? $result['fields']['entity_id'] : $result[$entity_type]->entity_id;
+      $entity = entity_load($entity_type, array($entity_id));
+
+      if (is_object(reset($entity))) {
+        $build = entity_view($entity_type, $entity, $view_mode);
+        // Hide links.
+        $build['links']['#access'] = FALSE;
+
+        $variables['search_results'] .= render($build);
+       }
+     }
+   }
+
+  $variables['pager'] = theme('pager', array('tags' => NULL));
+  $variables['theme_hook_suggestions'][] = 'search_results__' . $variables['module'];
+}

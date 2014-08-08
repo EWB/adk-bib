@@ -1,0 +1,14 @@
+ewb on August 6th, 2014 to fix the way the slider shows years - from 1,800 to 1800 - eg. removing the comma
+
+
+$wrapper.children('.facetapi-slider-min').css("margin-left", $real_left_position + "px");
+$wrapper.children('.facetapi-slider-max').css("margin-right", $real_right_position + "px");
+
+from
+
+
+$wrapper.children('.facetapi-slider-min').css("margin-left", $real_left_position + "px,");
+$wrapper.children('.facetapi-slider-max').css("margin-right", $real_right_position + "px,");
+
+
+
