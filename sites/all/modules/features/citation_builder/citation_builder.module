@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the Citation Builder feature.
+ */
+
+include_once 'citation_builder.features.inc';

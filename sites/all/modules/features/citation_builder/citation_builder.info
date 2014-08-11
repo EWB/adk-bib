@@ -1,0 +1,16 @@
+name = Citation Builder
+description = Creates and configures book CT along with Person CT and Publisher CT
+core = 7.x
+package = Features
+version = 7.x-1.0-alpha1
+project = citation_builder
+dependencies[] = ctools
+dependencies[] = date
+dependencies[] = entityreference
+dependencies[] = features
+dependencies[] = feeds
+dependencies[] = number
+dependencies[] = taxonomy
+features[ctools][] = feeds:feeds_importer_default:1
+features[features_api][] = api:2
+features_exclude[dependencies][book_ewb] = book_ewb
