@@ -41,6 +41,19 @@ function radix_theme(&$existing, $type, $theme, $path) {
       ),
       'template' => 'templates/other/radix-modal',
     ),
+    'radix_tabs' => array(
+      'variables' => array(
+        'tabs' => NULL,
+        'type' => NULL,
+      ),
+      'template' => 'templates/other/radix-tabs',
+    ),
+    'radix_grid' => array(
+      'variables' => array(
+        'items' => NULL,
+      ),
+      'template' => 'templates/other/radix-grid',
+    ),
   );
 }
 
@@ -280,6 +293,43 @@ function radix_preprocess_radix_modal(&$variables) {
         $variables['buttons'][$key] = l($button['text'], $link, $options);
       }
     }
+  }
+}
+
+/**
+ * Implements template_proprocess_radix_tabs().
+ */
+function radix_preprocess_radix_tabs(&$variables) {
+  $tabs = &$variables['tabs'];
+
+  // Create an id for each tab.
+  foreach ($tabs as &$tab) {
+    // Create an attributes_array for each tab.
+    $attributes_array = !empty($tab['attributes_array']) ? $tab['attributes_array'] : array();
+
+    // Get options.
+    $options = !empty($tab['options']) ? $tab['options'] : array();
+    $options = array_merge($options, array('html' => TRUE, 'attributes' => $attributes_array));
+
+    // Create the tab element.
+    $tab['tab'] = array(
+      '#theme' => 'link',
+      '#text' => $tab['title'],
+      '#path' => isset($tab['href']) ? $tab['href'] : current_path(),
+      '#options' => $options,
+    );
+
+    // If content is not empty, this tab can toggle a tab.
+    if (!empty($tab['content'])) {
+      $tab['id'] = drupal_html_class($tab['title']);
+      $tab['tab']['#options']['fragment'] = $tab['id'];
+      $tab['tab']['#options']['attributes']['data-toggle'] = "tab";
+    }
+  }
+
+  // Default to nav-tabs if type is not provided.
+  if (empty($variables['type'])) {
+    $variables['type'] = 'tabs';
   }
 }
 

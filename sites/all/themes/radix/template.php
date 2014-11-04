@@ -91,9 +91,6 @@ function radix_preprocess_page(&$variables) {
     drupal_add_js($base['scheme'] . '://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js', 'external');
   }
 
-  // Add CSS for Font Awesome
-  // drupal_add_css('//netdna.bootstrapcdn.com/font-awesome/3.2.1/css/font-awesome.min.css', 'external');
-
   // Determine if the page is rendered using panels.
   $variables['is_panel'] = FALSE;
   if (module_exists('page_manager') && count(page_manager_get_current_page())) {
@@ -107,14 +104,13 @@ function radix_preprocess_page(&$variables) {
 
   // Theme action links as buttons.
   foreach ($variables['action_links'] as $key => &$link) {
-    $link['#link']['localized_options']['attributes'] = array('class' => array('btn', 'btn-primary', 'btn-sm'));
+    $link['#link']['localized_options']['attributes'] = array('class' => array('btn', 'btn-primary'));
   }
 
   // Add search_form to theme.
   $variables['search_form'] = '';
   if (module_exists('search') && user_access('search content')) {
     $search_box_form = drupal_get_form('search_form');
-    //jfl $search_box_form = drupal_get_form('search_block_form');
     $search_box_form['basic']['keys']['#title'] = '';
     $search_box_form['basic']['keys']['#size'] = 20;
     $search_box_form['basic']['keys']['#attributes'] = array('placeholder' => 'Search');
@@ -128,17 +124,13 @@ function radix_preprocess_page(&$variables) {
 
   // Format and add main menu to theme.
   $variables['main_menu'] = menu_tree(variable_get('menu_main_links_source', 'main-menu'));
-  $variables['main_menu']['#theme_wrappers'] = array('menu_tree__navbar_nav');
-
-  // Format and add user menu to theme.
-  $variables['user_menu'] = menu_tree('user-menu');
-  $variables['user_menu']['#theme_wrappers'] = array('menu_tree__navbar_right');
+  $variables['main_menu']['#theme_wrappers'] = array();
 
   // Add a copyright message.
   $variables['copyright'] = t('Drupal is a registered trademark of Dries Buytaert.');
 
   // Display a message if Sass has not been compiled.
-  $theme_path = drupal_get_path('theme',$GLOBALS['theme']);
+  $theme_path = drupal_get_path('theme', $GLOBALS['theme']);
   $stylesheet_path = $theme_path . '/assets/stylesheets/screen.css';
   if (_radix_current_theme() == 'radix') {
     $stylesheet_path = $theme_path . '/assets/stylesheets/radix-style.css';
