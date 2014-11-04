@@ -29,28 +29,17 @@ OpenLayers.Control.GeofieldEditingToolbar = OpenLayers.Class(
         var tool = null;
 
         if (options.allow_edit && options.allow_edit !== 0) {
-
-          var deleteFeatureControl = new OpenLayers.Control.SelectFeature(layer, {
-            clickout: false,
-            toggle: false,
-            title: "Delete",
-            displayClass: "olControlDelete"
-          });
-
-          deleteFeatureControl.events.register("featurehighlighted", this, function(e) {
-            if (confirm('Are you sure you want to delete this feature?')) {
-              layer.removeFeatures([e.feature]);
-              deleteFeatureControl.deactivate();
-            } else {
-              deleteFeatureControl.unselect(e.feature);
-            }
-          });
-
-          controls.push(deleteFeatureControl);
-
           // add an Edit feature
           controls.push(new OpenLayers.Control.ModifyFeature(layer, {
-            deleteCodes: [46, 68, 100]
+            deleteCodes: [46, 68, 100],
+            handleKeypress: function(evt) {
+              if (this.feature && OpenLayers.Util.indexOf(this.deleteCodes, evt.keyCode) > -1) {
+                // We must unselect the feature before we delete it
+                var feature_to_delete = this.feature;
+                this.selectControl.unselectAll();
+                this.layer.removeFeatures([feature_to_delete]);
+              }
+            }
           }));
         } else {
           controls = [new OpenLayers.Control.Navigation()];
@@ -95,7 +84,7 @@ OpenLayers.Control.GeofieldEditingToolbar = OpenLayers.Class(
    */
   Drupal.behaviors.openlayers_behavior_geofield = {
     'attach': function(context, settings) {
-
+      
       // Only attach the behavior to a map
       if (!$(context).hasClass('openlayers-map')) return;
 
