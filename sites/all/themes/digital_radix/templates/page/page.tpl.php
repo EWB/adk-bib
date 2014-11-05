@@ -14,7 +14,7 @@
 <div id="top_bar_container">
       <div id="top_bar">
         <div id="slu">
-        <a href="http://www.stlawu.edu"><img id="stlaw" src="./images/slu-horizontal-white.png" alt="St. Lawrence University" height="38"/></a>
+        <a href="http://www.stlawu.edu"><img id="stlaw" src="http://digital.stlawu.edu/adirondack-bibliography/sites/all/themes/digital_radix/images/slu-horizontal-white.png" alt="St. Lawrence University" height="38"/></a>
          </div>
       </div> 
 </div>       
