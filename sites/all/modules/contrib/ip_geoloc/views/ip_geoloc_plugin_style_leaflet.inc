@@ -44,6 +44,7 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
         'visitor_marker_color' => array('default' => ''),
         'visitor_marker_special_char' => array('default' => ''),
         'visitor_marker_special_char_class' => array('default' => ''),
+        'visitor_marker_accuracy_circle' => array('default' => FALSE),
       ),
     );
 
@@ -80,6 +81,9 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
     $options['scale_metric'] = array('default' => FALSE);
     $options['scale_imperial'] = array('default' => FALSE);
     $options['zoom_indicator'] = array('default' => FALSE);
+    $options['open_balloons_on_click'] = array('default' => TRUE);
+    $options['open_balloons_on_hover'] = array('default' => FALSE);
+    $options['goto_content_on_click'] = array('default' => FALSE);
     $options['map_reset'] = array('default' => FALSE);
     $options['map_reset_css_class'] = array('default' => 'R');
     $options['map_cluster_toggle'] = array('default' => FALSE);
@@ -127,6 +131,7 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
       'contains' => array(
         'maxzoom' => array('default' => 18),
         'zoom' => array('default' => 2),
+        'zoom_on_click' => array('default' => ''),
         'center_lat' => array('default' => ''),
         'center_lon' => array('default' => ''),
         'scrollwheelzoom' => array('default' => TRUE),
@@ -187,13 +192,15 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
       '#required' => TRUE,
       '#weight' => $weight++,
     );
+    $desc1 = t('Examples: <em>250</em> or <em>50em</em> or <em>40vh</em> (percentage of viewport height).');
+    $desc2 = t('If left blank, the height defaults to 300 pixels. The width of the map will extend to its bounding container.');
+    $desc3 = t('You may enter <em>&lt;none></em>. If you do, then the height attribute must be set through Javascript or CSS elsewhere or the map will not display. CSS example: <em>.ip-geoloc-map .leaflet-container { height: 150px; }</em>');
     $form['map_height'] = array(
       '#title' => t('Map height'),
       '#type' => 'textfield',
-      '#field_suffix' => t('px'),
-      '#size' => 4,
+      '#size' => 7,
       '#default_value' => $this->options['map_height'],
-      '#description' => t('The default produces a map of 300 pixels high with a width extending to its bounding container.'),
+      '#description' =>  $desc1 . '<br/>' . $desc2 . '<br/>' . $desc3,
       '#weight' => $weight++,
     );
   }
@@ -249,6 +256,9 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
     $form['visitor_marker'] = array(
       '#type' => 'fieldset',
       '#title' => t('Visitor marker style'),
+      '#description' => t('For the visitor marker to show, enable the <em>Set my location</em> block and/or tick the option to periodically reverse-geocode via Google, under the <a href="@config_page">Data collection options</a>.', array(
+        '@config_page' => url('admin/config/system/ip_geoloc'),
+      )),
       '#weight' => $weight++,
     );
 
@@ -278,6 +288,12 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
       '#size' => 25,
       '#default_value' => $this->options['visitor_marker']['visitor_marker_special_char_class'],
       '#description' => t('As above.'),
+    );
+    $form['visitor_marker']['visitor_marker_accuracy_circle'] = array(
+      '#title' => t('Accuracy circle'),
+      '#type' => 'checkbox',
+      '#default_value' => $this->options['visitor_marker']['visitor_marker_accuracy_circle'],
+      '#description' => t("Display a circle depicting where the visitor's real location is most likely to be."),
     );
   }
 
@@ -389,6 +405,24 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
       '#default_value' => $this->options['map_cluster_toggle'],
       '#description' => t('This button allows the visitor to toggle marker clustering on/off at any time and at any zoom level.') . '<br/>'
         . t('A cluster radius must be specified below.'),
+      '#weight' => $weight++,
+    );
+    $form['open_balloons_on_click'] = array(
+      '#title' => t('Display non-excluded fields in a pop-up balloon above the marker, when <em>clicked</em>.'),
+      '#type' => 'checkbox',
+      '#default_value' => $this->options['open_balloons_on_click'],
+      '#weight' => $weight++,
+    );
+    $form['open_balloons_on_hover'] = array(
+      '#title' => t('Display non-excluded fields in a pop-up balloon above the marker, when <em>hovered</em>.'),
+      '#type' => 'checkbox',
+      '#default_value' => $this->options['open_balloons_on_hover'],
+      '#weight' => $weight++,
+    );
+    $form['goto_content_on_click'] = array(
+      '#title' => t('Go to the associated content page, when a marker is <em>clicked</em>.'),
+      '#type' => 'checkbox',
+      '#default_value' => $this->options['goto_content_on_click'],
       '#weight' => $weight++,
     );
     if (!$lib_markercluster) {
@@ -548,7 +582,7 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
 
   private function _add_cluster_differentiator(&$form, &$form_state, $lib_markercluster, &$weight) {
     $path = drupal_get_path('module', 'ip_geoloc');
-    $intro = t('Superior marker clustering with <a target="regionbound" href="!url_regionbound">RegionBound</a>. See the <a target="readme" href="!url_readme">README</a> for details.', array(
+    $intro = t('Region-aware marker clustering with <a target="regionbound" href="!url_regionbound">RegionBound</a>. See the <a target="readme" href="!url_readme">README</a> for details.', array(
       '!url_regionbound' => url('http://regionbound.com'),
       '!url_readme' => url("$path/README.txt"),
     ));
@@ -582,7 +616,8 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
       $form['cluster_differentiator']['#description'] .= $desc . ' ' . t('and <a href="!url_regionbound">RegionBound</a> JS plugin.', array('!url_regionbound' => url('http://regionbound.com')));
     }
     elseif ($lib_markercluster && (empty($region_field_names) || !reset($region_field_names))) {
-      $note_region = t('Download the .js file from <a target="regionbound" href="!url_regionbound">Regionbound</a> and drop it in %directory, without renaming. Then select your region differentiator below.', array(
+      $note_region = t('Download the file %js from <a target="regionbound" href="!url_regionbound">Regionbound</a> and drop it in %directory, without renaming. Then select your region differentiator below.', array(
+        '%js' => IP_GEOLOC_LEAFLET_MARKERCLUSTER_REGIONBOUND_JS,
         '%directory' => $lib_markercluster,
         '!url_regionbound' => url('http://regionbound.com'),
       ));
@@ -675,7 +710,7 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
       '#type' => 'select',
       '#default_value' => $this->options['cluster_aggregation']['aggregation_field'],
       '#options' => $fields,
-      '#description' => t('Must be a numeric field in order for aggregation to make sense.'),
+      '#description' => t('For aggregation to make sense, the selected field must be numeric or represent a list. If a list, aggregation will be applied to the element <em>count</em>.'),
     );
     $form['cluster_aggregation']['aggregation_function'] = array(
       '#title' => t('Aggregation function'),
@@ -745,6 +780,13 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
       '#default_value' => $this->options['map_options']['zoom'],
       '#description' => t('Does not apply to auto-box centering except when only one or no markers are shown.'),
     );
+    $form['map_options']['zoom_on_click'] = array(
+      '#title' => t('Zoom-on-click zoom level (1..@maxzoom)', array('@maxzoom' => $zoom_top)),
+      '#type' => 'textfield',
+      '#size' => 2,
+      '#default_value' => $this->options['map_options']['zoom_on_click'],
+      '#description' => t('Level to zoom to when a marker is clicked. Leave blank to disable this feature.'),
+    );
     $form['map_options']['center_lat'] = array(
       '#title' => t('Latitude of initial center of map'),
       '#type' => 'textfield',
@@ -786,9 +828,9 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
   public function options_validate(&$form, &$form_state) {
     ip_geoloc_plugin_style_bulk_of_form_validate($form, $form_state);
     $style_options = $form_state['values']['style_options'];
-    $map_height = $style_options['map_height'];
-    if (!is_numeric($map_height) || $map_height <= 0) {
-      form_error($form['map_height'], t('Map height cannot be blank and must be a positive number.'));
+    $map_height = trim($style_options['map_height']);
+    if (is_numeric($map_height) && $map_height <= 0) {
+      form_error($form['map_height'], t('Map height must be a positive number.'));
     }
     $selected_map = ip_geoloc_plugin_style_leaflet_map_get_info($style_options['map']);
     $zoom_top = 18;
@@ -812,9 +854,9 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
       $cluster_aggregation = $style_options['cluster_aggregation'];
       if (!empty($cluster_aggregation['aggregation_field'])) {
         $aggregation_field_info = field_info_field($cluster_aggregation['aggregation_field']);
-        $valid_types = array('number_integer', 'number_decimal', 'number_float');
+        $valid_types = array('number_integer', 'number_decimal', 'number_float', 'entityreference');
         if (!$aggregation_field_info || !in_array($aggregation_field_info['type'], $valid_types)) {
-          drupal_set_message(t('A cluster aggregation field that is not a single number may cause severe errors.'));
+          drupal_set_message(t('A cluster aggregation field that cannot be interpreted as a number may cause unexpected errors.'));
         }
       }
     }
@@ -835,7 +877,12 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
     $render_start = microtime(TRUE);
 
     ip_geoloc_plugin_style_render_fields($this);
-    $locations = ip_geoloc_plugin_style_extract_locations($this);
+
+    $open_balloons_on_click = !empty($this->options['open_balloons_on_click']);
+    $open_balloons_on_hover = !empty($this->options['open_balloons_on_hover']);
+
+    $enable_balloons = $open_balloons_on_click || $open_balloons_on_hover;
+    $locations = ip_geoloc_plugin_style_extract_locations($this, $enable_balloons);
 
     $this->fill_out_location_regions($locations);
 
@@ -865,6 +912,7 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
         'imperial' => !empty($this->options['scale_imperial']),
       );
     }
+    $goto_content_on_click = !empty($this->options['goto_content_on_click']);
     $reset_control = FALSE;
     if (!empty($this->options['map_reset'])) {
       $label = filter_xss_admin($this->options['map_reset_css_class']);
@@ -890,6 +938,7 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
     $marker_path = file_create_url(ip_geoloc_marker_directory());
     $max_zoom = (int) $this->options['map_options']['maxzoom'];
     $zoom = max(1, (int)$this->options['map_options']['zoom']);
+    $zoom_on_click = (int) $this->options['map_options']['zoom_on_click'];
     $scroll_wheel_zoom = (bool) $this->options['map_options']['scrollwheelzoom'];
     $dragging = (bool) $this->options['map_options']['dragging'];
 
@@ -962,8 +1011,18 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
       $feature = array();
       if (isset($location->latitude) || isset($location->lat)) {
         $feature['type'] = 'point';
-        $feature['lat'] = isset($location->latitude) ? $location->latitude : $location->lat;
+        $feature['lat'] = isset($location->latitude)  ? $location->latitude  : $location->lat;
         $feature['lon'] = isset($location->longitude) ? $location->longitude : $location->lon;
+        if (!empty($location->random_displacement)) {
+            ip_geoloc_add_random_displacement($feature, $location->random_displacement);
+            $circle = array(
+              'type'=> 'circle',
+              'lat' => $feature['lat'],
+              'lon' => $feature['lon'],
+              'radius' => $location->random_displacement,
+            );
+            $features[] = $circle;
+        }
       }
       elseif (isset($location->component)) {
         // Possibly parsed by leaflet_process_geofield()
@@ -993,7 +1052,7 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
       if (!empty($sync_flags)) {
         $feature['flags'] = isset($feature['flags']) ? $feature['flags'] | $sync_flags : $sync_flags;
       }
-      if (isset($location->balloon_text)) {
+      if ($enable_balloons && isset($location->balloon_text)) {
         $feature['popup'] = $location->balloon_text;
       }
       if (!empty($location->marker_special_char) || !empty($location->marker_special_char_class)) {
@@ -1064,32 +1123,48 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
       }
       $features[] = $feature;
     }
-    if ($visitor_marker_color != 'none' && isset($visitor_location['latitude'])) {
-      // See leaflet/README.txt for examples of Leaflet "features"
-      $visitor_feature = array(
-        'type' => 'point',
-        'lat' => $visitor_location['latitude'],
-        'lon' => $visitor_location['longitude'],
-        'specialChar' => filter_xss_admin($this->options['visitor_marker']['visitor_marker_special_char']),
-        'specialCharClass' => filter_xss_admin($this->options['visitor_marker']['visitor_marker_special_char_class']),
-        'popup' => t('Your approximate location'),
-        'tooltip' => t('Your approximate location'),
-        // See leaflet_markercluster.drupal.js.
-        'flags' => LEAFLET_MARKERCLUSTER_EXCLUDE_FROM_CLUSTER,
-      );
-      if ($visitor_marker_color != '') {
-        if (!empty($visitor_feature['specialChar']) || !empty($visitor_feature['specialCharClass'])) {
-          $has_special_markers = TRUE;
-        }
-        $visitor_feature['icon'] = array(
-          'iconUrl' => $marker_path . "/$visitor_marker_color.png",
-          'iconSize' => array('x' => $marker_width, 'y' => $marker_height),
-          'iconAnchor' => array('x' => (int) (($marker_width + 1) / 2), 'y' => $marker_anchor),
-          // Just above topline, center.
-          'popupAnchor' => array('x' => 0, 'y' => -$marker_height - 1),
+    if (isset($visitor_location['latitude'])) {
+        if ($visitor_marker_color != 'none') {
+        // See leaflet/README.txt for examples of Leaflet "features"
+        $visitor_feature = array(
+          'type' => 'point',
+          'lat' => $visitor_location['latitude'],
+          'lon' => $visitor_location['longitude'],
+          'specialChar' => filter_xss_admin($this->options['visitor_marker']['visitor_marker_special_char']),
+          'specialCharClass' => filter_xss_admin($this->options['visitor_marker']['visitor_marker_special_char_class']),
+          'popup' => !empty($visitor_location['popup']) ? $visitor_location['popup'] : t('Your approximate location'),
+          'tooltip' => !empty($visitor_location['tooltip']) ? $visitor_location['tooltip'] : t('Your approximate location'),
+          'zIndex' => 9999,
+          // See leaflet_markercluster.drupal.js.
+          'flags' => LEAFLET_MARKERCLUSTER_EXCLUDE_FROM_CLUSTER,
         );
+        if ($visitor_marker_color != '') {
+          if (!empty($visitor_feature['specialChar']) || !empty($visitor_feature['specialCharClass'])) {
+            $has_special_markers = TRUE;
+          }
+          $visitor_feature['icon'] = array(
+            'iconUrl' => $marker_path . "/$visitor_marker_color.png",
+            'iconSize' => array('x' => $marker_width, 'y' => $marker_height),
+            'iconAnchor' => array('x' => (int) (($marker_width + 1) / 2), 'y' => $marker_anchor),
+            // Just above topline, center.
+            'popupAnchor' => array('x' => 0, 'y' => -$marker_height - 1),
+          );
+        }
+        $features[] = $visitor_feature;
       }
-      $features[] = $visitor_feature;
+      if (!empty($this->options['visitor_marker']['visitor_marker_accuracy_circle']) && !empty($visitor_location['accuracy'])) {
+        $visitor_accuracy_circle = array(
+          'type' => 'circle',
+          'lat' => $visitor_location['latitude'],
+          'lon' => $visitor_location['longitude'],
+          'radius' => (float) $visitor_location['accuracy'],
+          'popup' => !empty($visitor_location['popup']) ? $visitor_location['popup'] : t("You are within @m meters of the centre of this circle.", array('@m' => $visitor_location['accuracy'])),
+          'label' => !empty($visitor_location['tooltip']) ? $visitor_location['tooltip'] : t('You are within this circle'), // requires Leaflet Label
+          'zIndex' => 9998,
+          'flags' => LEAFLET_MARKERCLUSTER_EXCLUDE_FROM_CLUSTER,
+        );
+        $features[] = $visitor_accuracy_circle;
+      }
     }
     // If auto-box is chosen ($center_option==0), zoom only when there are
     // 0 or 1 markers [#1863374]
@@ -1194,12 +1269,18 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
       }
     }
     $map['settings']['zoomIndicator'] = $zoom_indicator;
+    $map['settings']['zoomOnClick'] = $zoom_on_click;
     $map['settings']['resetControl'] = $reset_control;
     $map['settings']['clusterControl'] = $cluster_control;
     $map['settings']['scaleControl'] = $scale_control;
     if ($has_mini_map || $zoom_indicator || $reset_control || $cluster_control || $scale_control) {
       drupal_add_js($module_path . '/js/ip_geoloc_leaflet_controls.js', array('weight' => 1));
       drupal_add_css($module_path . '/css/ip_geoloc_leaflet_controls.css');
+    }
+    $map['settings']['openBalloonsOnHover'] = $open_balloons_on_hover;
+    $map['settings']['gotoContentOnClick'] = $goto_content_on_click;
+    if ($open_balloons_on_hover || $goto_content_on_click) {
+      drupal_add_js($module_path . '/js/ip_geoloc_leaflet_goto_content_on_click.js', array('scope' => 'footer'));
     }
     $settings = array(
       'mapId' => $map_id,
@@ -1227,10 +1308,14 @@ class ip_geoloc_plugin_style_leaflet extends views_plugin_style {
       drupal_add_css($module_path . '/css/ip_geoloc_leaflet_markers.css');
       drupal_add_js($module_path . '/js/ip_geoloc_leaflet_tagged_marker.js', array('weight' => 1));
     }
+    if ($zoom_on_click) {
+      drupal_add_js($module_path . '/js/ip_geoloc_leaflet_zoom_on_click.js', array('scope' => 'footer'));
+    }
+    // drupal_alter('leaflet_build_map', $build); // @todo [#2567391]
 
     $output = theme('ip_geoloc_leaflet', array(
       'map_id' => $map_id,
-      'height' => $this->options['map_height'],
+      'height' => trim($this->options['map_height']),
       'view' => $this->view,
     ));
 
@@ -1432,7 +1517,7 @@ function _ip_geoloc_is_no_marker($marker_color) {
  * Note: this indirectly calls ip_geoloc_leaflet_map_info_alter($map_info).
  */
 function ip_geoloc_plugin_style_leaflet_map_get_info($map_name = NULL) {
-  return leaflet_map_get_info($map_name);
+  return module_exists('leaflet') ? leaflet_map_get_info($map_name) : array();
 }
 
 /**
